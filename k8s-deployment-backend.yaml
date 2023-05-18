@@ -1,0 +1,158 @@
+---
+apiVersion: gateway.kyma-project.io/v1alpha1
+kind: APIRule
+metadata:
+  creationTimestamp: null
+  labels:
+    app: kyma-multitenant-node-multitenancy
+    release: multitenancy
+  name: kyma-multitenant-node-multitenancy
+spec:
+  gateway: kyma-gateway.kyma-system.svc.cluster.local
+  rules:
+  - accessStrategies:
+    - handler: allow
+    methods:
+    - GET
+    - POST
+    - PUT
+    - PATCH
+    - DELETE
+    - HEAD
+    path: /.*
+  service:
+    host: 5cc01b26trial-node.c-5209f87.kyma.ondemand.com # replace with the values of your account
+    name: kyma-multitenant-node-multitenancy
+    port: 8080
+status: {}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: kyma-multitenant-node-multitenancy
+    release: multitenancy
+  name: kyma-multitenant-node-multitenancy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kyma-multitenant-node-multitenancy
+      release: multitenancy
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: kyma-multitenant-node-multitenancy
+        release: multitenancy
+    spec:
+      automountServiceAccountToken: true
+      imagePullSecrets:
+        - name: registry-secret1234 # replace with your own registry secret
+      containers:
+      - env:
+        - name: PORT
+          value: "8080"
+        - name: TMPDIR
+          value: /tmp
+        image: 6175406/multitenant-kyma-backend:v1  # replace with your Docker Hub account name
+        imagePullPolicy: Always
+        livenessProbe:
+          exec:
+            command:
+            - nc
+            - -z
+            - localhost
+            - "8080"
+          failureThreshold: 1
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          successThreshold: 1
+          timeoutSeconds: 60
+        name: kyma-multitenant-node-multitenancy
+        ports:
+        - containerPort: 8080
+        readinessProbe:
+          exec:
+            command:
+            - nc
+            - -z
+            - localhost
+            - "8080"
+          failureThreshold: 1
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          successThreshold: 1
+          timeoutSeconds: 60
+        resources:
+          limits:
+            ephemeral-storage: 256M
+            memory: 256M
+          requests:
+            cpu: 100m
+            ephemeral-storage: 256M
+            memory: 256M
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          privileged: false
+          readOnlyRootFilesystem: false
+        volumeMounts:
+        - name: cread-volume-1
+          mountPath: "/etc/secrets/sapcp/credstore/credential-store"
+          readOnly: true
+      securityContext:
+        runAsNonRoot: false
+      volumes:
+      - name: cread-volume-1
+        secret:
+          secretName: mycreadbind
+status: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: null
+  labels:
+    app: kyma-multitenant-node-multitenancy
+    release: multitenancy
+  name: kyma-multitenant-node-multitenancy
+spec:
+  ports:
+  - port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    app: kyma-multitenant-node-multitenancy
+    release: multitenancy
+status:
+  loadBalancer: {}
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  creationTimestamp: null
+  labels:
+    release: multitenancy
+  name: multitenancy
+spec:
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: istio-system
+      podSelector:
+        matchLabels:
+          app: istio-ingressgateway
+  podSelector:
+    matchLabels:
+      release: multitenancy
+  policyTypes:
+  - Ingress
